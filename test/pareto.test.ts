@@ -11,6 +11,9 @@
  */
 
 import http from "node:http";
+import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
 	createModels,
@@ -205,6 +208,82 @@ describe("the scoped-settings base URL", () => {
 		// A malformed override quarantines the factory loudly rather than
 		// silently falling back to the constant.
 		expect(typeof PARETO_BASE_URL).toBe("string");
+	});
+});
+
+describe("the loader's two-phase host (scoped settings, Task 9 P1 regression)", () => {
+	it("resolves the real slug's settings file at factory time — the override wins end to end", async () => {
+		serveCatalog();
+		// The sigrun loader derives its PROVISIONAL host identity from the
+		// load specifier — the package's manifest name (the Task 9 P1 fix:
+		// the pre-fix ""-keyed host made factory-time settings reads hit
+		// settings/.json and the override inert in real deployments). This
+		// pins provisional == resolved for this plugin: the package name
+		// must slugify to the factory result's `name` slug, or factory-time
+		// reads lose their scope.
+		const pkg = JSON.parse(
+			await readFile(join(import.meta.dirname, "..", "package.json"), "utf8"),
+		) as { name: string };
+		const slug = pkg.name
+			.split("/")
+			.pop()!
+			.replace(/@[^@]*$/, "")
+			.toLowerCase()
+			.replace(/[^a-z0-9_-]+/g, "-")
+			.replace(/^[-_]+|[-_]+$/g, "");
+		expect(slug).toBe("sigrun-pareto");
+
+		const dir = await mkdtemp(join(tmpdir(), "sigrun-pareto-host-"));
+		try {
+			// The scoped settings FILE, written before the factory runs
+		// (exactly how an operator's deployment lays it down).
+			const settingsFile = join(dir, "settings", `${slug}.json`);
+			await mkdir(dirname(settingsFile), { recursive: true });
+			await writeFile(
+				settingsFile,
+				JSON.stringify({ baseUrl }),
+			);
+			// The loader-shaped two-phase host: pre-keyed on the
+			// specifier-derived slug, settings FILE-BACKED exactly like
+			// sigrun's scopedExtensionStores (reads settings/<slug>.json;
+			// absent file → {}). Not an in-memory stub — the factory must
+			// resolve the real file through the store contract.
+			const host: SigrunPluginHost = {
+				stores: {
+					settings: {
+					get: async () => {
+						try {
+							return JSON.parse(
+								await readFile(settingsFile, "utf8"),
+							) as Record<string, unknown>;
+						} catch {
+							return {}; // absent file → {} (the store's contract)
+						}
+					},
+					set: async () => {
+						throw new Error("unexpected settings write in tests");
+					},
+				},
+			},
+			};
+			const result = await sigrunPareto(host);
+			const store = createModels({
+				credentials: credentialStore("bridged-key"),
+				authContext: authContext({}),
+			});
+			store.setProvider(result.providers[0]!.provider);
+			const refresh = await store.refresh({ force: true });
+			expect(refresh.errors.size).toBe(0);
+			// The override (this run's fixture server) won: the catalog GET
+			// hit the fixture server and every model is stamped with it.
+			expect(requests).toHaveLength(1);
+			expect(requests[0]!.path).toBe("/v1/models");
+			const catalog = store.getModels(PARETO_PROVIDER_ID);
+			expect(catalog.length).toBe(2);
+			expect(catalog.every((m) => m.baseUrl === baseUrl)).toBe(true);
+		} finally {
+			await rm(dir, { recursive: true, force: true });
+		}
 	});
 });
 
