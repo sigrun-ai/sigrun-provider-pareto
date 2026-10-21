@@ -1,5 +1,5 @@
 /**
- * Contract tests for sigrun-pareto (provider plugins Task 9), hermetic:
+ * Contract tests for @sigrun/provider-pareto (provider plugins Task 9), hermetic:
  * every HTTP exchange goes to a node:http fixture server on 127.0.0.1 —
  * never the network, never process.env (ambient env arrives through the
  * injected AuthContext, the same seam sigrun's bridge uses).
@@ -156,7 +156,7 @@ function models(
 describe("the factory contract", () => {
 	it("returns a provider-only contributor with an empty baseline catalog", async () => {
 		const result = await sigrunPareto(host());
-		expect(result.name).toBe("sigrun-pareto");
+		expect(result.name).toBe("provider-pareto");
 		// Provider-only: no extension field (the loader's Task 1 pathway).
 		expect("extension" in result).toBe(false);
 		expect(result.providers).toHaveLength(1);
@@ -231,9 +231,9 @@ describe("the loader's two-phase host (scoped settings, Task 9 P1 regression)", 
 			.toLowerCase()
 			.replace(/[^a-z0-9_-]+/g, "-")
 			.replace(/^[-_]+|[-_]+$/g, "");
-		expect(slug).toBe("sigrun-pareto");
+		expect(slug).toBe("provider-pareto");
 
-		const dir = await mkdtemp(join(tmpdir(), "sigrun-pareto-host-"));
+		const dir = await mkdtemp(join(tmpdir(), "provider-pareto-host-"));
 		try {
 			// The scoped settings FILE, written before the factory runs
 		// (exactly how an operator's deployment lays it down).

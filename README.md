@@ -1,4 +1,4 @@
-# sigrun-pareto
+# @sigrun/provider-pareto
 
 A [sigrun](https://github.com/sigrun-ai) provider plugin:
 [Pareto](https://paretoinference.com) paygo (OpenAI-compatible
@@ -7,7 +7,7 @@ inference) as one dynamic chat provider.
 ## What it contributes
 
 A **provider-only contributor** — the default export is a factory
-returning `{ name: "sigrun-pareto", providers: [{ provider, readiness }],
+returning `{ name: "provider-pareto", providers: [{ provider, readiness }],
 health }` with no pi-durable extension surface. Sigrun's loader merges
 the provider into its `Models` store at boot.
 
@@ -31,11 +31,11 @@ the provider into its `Models` store at boot.
 The default endpoint constant is `https://api.paretoinference.com/v1`
 (live-verified 2026-10-18). Pareto's documented base URL is a
 deployment-specific value, so the factory reads the plugin's scoped
-settings first — `baseUrl` (string) in `settings/sigrun-pareto.json`
+settings first — `baseUrl` (string) in `settings/provider-pareto.json`
 overrides the constant:
 
 ```jsonc
-// settings/sigrun-pareto.json (in the sigrun config dir)
+// settings/provider-pareto.json (in the sigrun config dir)
 { "baseUrl": "https://your-pareto-endpoint.example/v1" }
 ```
 
