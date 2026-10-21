@@ -1,5 +1,5 @@
 /**
- * sigrun-pareto — a sigrun provider plugin (provider plugins Task 9):
+ * @sigrun/provider-pareto — a sigrun provider plugin (provider plugins Task 9):
  * [Pareto](https://paretoinference.com) paygo (OpenAI-compatible
  * inference) as one dynamic provider.
  *
@@ -10,7 +10,7 @@
  * deltas from the reference are the provider id, the base URL, the
  * ambient env key, and ONE addition: the base URL is
  * deployment-configurable through the plugin's scoped settings
- * (`baseUrl` in `settings/sigrun-pareto.json`, constant fallback),
+ * (`baseUrl` in `settings/provider-pareto.json`, constant fallback),
  * because Pareto's documented endpoint is a deployment-specific value.
  * Credentials resolve through sigrun's auth.json bridge (the stored
  * credential arrives as `credential` on the auth resolver, ambient env

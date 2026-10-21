@@ -8,13 +8,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ## [0.1.0] - 2026-10-18
+### Changed
+- Renamed to `@sigrun/provider-pareto` for the 0.1.0 release (GitHub
+  repo `sigrun-ai/sigrun-provider-pareto`): published package metadata
+  (`publishConfig` access/provenance), host modules
+  (`@earendil-works/pi-ai`, `@earendil-works/pi-durable`) moved to
+  `peerDependencies` mirrored in `devDependencies` at exact `1.3.0`,
+  CHANGELOG.md joined the files whitelist, and a manifest hygiene check
+  wired into `npm test`.
 ### Added
 - Sigrun provider plugin: Pareto paygo
   (`https://api.paretoinference.com/v1`, live-verified 2026-10-18) as
   one dynamic OpenAI-compatible provider (`provider: "pareto"` stamped
   on every catalog entry so persisted catalogs survive cold-boot
   restore).
-- Provider-only contributor factory: `{ name: "sigrun-pareto",
+- Provider-only contributor factory: `{ name: "provider-pareto",
   providers: [{ provider, readiness }], health }` — no pi-durable
   extension surface.
 - Deployment-configurable base URL: the async factory reads `baseUrl`

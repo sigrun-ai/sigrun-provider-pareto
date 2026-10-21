@@ -1,5 +1,5 @@
 /**
- * sigrun-pareto — a sigrun provider plugin (provider plugins Task 9):
+ * @sigrun/provider-pareto — a sigrun provider plugin (provider plugins Task 9):
  * [Pareto](https://paretoinference.com) paygo (OpenAI-compatible
  * inference) as one dynamic provider.
  *
@@ -10,7 +10,7 @@
  * deltas from the reference are the provider id, the base URL, the
  * ambient env key, and ONE addition: the base URL is
  * deployment-configurable through the plugin's scoped settings
- * (`baseUrl` in `settings/sigrun-pareto.json`, constant fallback),
+ * (`baseUrl` in `settings/provider-pareto.json`, constant fallback),
  * because Pareto's documented endpoint is a deployment-specific value.
  * Credentials resolve through sigrun's auth.json bridge (the stored
  * credential arrives as `credential` on the auth resolver, ambient env
@@ -96,7 +96,7 @@ export function resolveParetoBaseUrl(
 	const value = settings.baseUrl;
 	if (typeof value !== "string" || value.trim().length === 0) {
 		throw new Error(
-			"sigrun-pareto: settings/sigrun-pareto.json baseUrl must be a non-empty string when present",
+			"provider-pareto: settings/provider-pareto.json baseUrl must be a non-empty string when present",
 		);
 	}
 	return value.trim();
@@ -197,7 +197,7 @@ export function createParetoPlugin(
 		const next = status();
 		if (next === lastAnnounced) return;
 		console.warn(
-			`sigrun-pareto: pareto ${lastAnnounced ?? "startup"} → ${next}` +
+			`provider-pareto: pareto ${lastAnnounced ?? "startup"} → ${next}` +
 				(lastRefreshDetail !== undefined && next === "degraded"
 					? ` (${lastRefreshDetail})`
 					: ""),
@@ -264,7 +264,7 @@ export function createParetoPlugin(
 				// persists whatever fetchModels returns; an empty array
 				// would wipe the catalog.
 				throw new Error(
-					`sigrun-pareto: Pareto is not configured ` +
+					`provider-pareto: Pareto is not configured ` +
 						`(no auth.json credential and no ${PARETO_API_KEY_ENV}); ` +
 						"refusing to publish an empty catalog",
 				);
@@ -294,7 +294,7 @@ export function createParetoPlugin(
 				const message = cause instanceof Error ? cause.message : String(cause);
 				noteRefresh(false, message);
 				throw new Error(
-					`sigrun-pareto: Pareto catalog refresh failed: ${message}`,
+					`provider-pareto: Pareto catalog refresh failed: ${message}`,
 				);
 			}
 		},
@@ -328,7 +328,7 @@ export default async function sigrunPareto(
 	const settings = await host.stores.settings.get();
 	const plugin = createParetoPlugin(resolveParetoBaseUrl(settings));
 	return {
-		name: "sigrun-pareto",
+		name: "provider-pareto",
 		providers: [{ provider: plugin.provider, readiness: plugin.readiness }],
 		health: plugin.health,
 	};
