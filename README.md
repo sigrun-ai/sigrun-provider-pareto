@@ -26,22 +26,32 @@ the provider into its `Models` store at boot.
 - **Health** — `degraded` only when the provider is configured and its
   last refresh failed; an unconfigured optional plugin reports `ok`.
 
-## Base URL
+## Settings
 
-The default endpoint constant is `https://api.paretoinference.com/v1`
-(live-verified 2026-10-18). Pareto's documented base URL is a
-deployment-specific value, so the factory reads the plugin's scoped
-settings first — `baseUrl` (string) in `settings/provider-pareto.json`
-overrides the constant:
+The plugin's settings page is a generated form (the schema is its whole
+contract — `src/settings-schema.ts`). One key:
+
+| Key | Type | Default |
+| --- | --- | --- |
+| `baseUrl` | URI string | `https://api.paretoinference.com/v1` |
+
+Pareto's documented base URL is a deployment-specific value, so
+`baseUrl` points the plugin at your endpoint (or a proxy in front of
+it); the catalog is fetched from `<baseUrl>/models`. It is read ONCE,
+when the extension loads, so an edited value applies at the next
+restart (the page says so).
 
 ```jsonc
 // settings/provider-pareto.json (in the sigrun config dir)
 { "baseUrl": "https://your-pareto-endpoint.example/v1" }
 ```
 
-An absent `baseUrl` uses the constant; a present-but-malformed one
-(empty or not a string) fails the factory loudly (the extension
-quarantines with the reason) rather than silently falling back.
+A malformed value (not an absolute URI — including one padded with
+spaces, which the earlier parser silently trimmed) is repaired to the
+default at load: sigrun logs one boot-time warning, and
+the plugin boots on `https://api.paretoinference.com/v1`. The form
+refuses a malformed value at save. Earlier releases QUARANTINED the
+plugin on a malformed value instead.
 
 ## Credentials
 

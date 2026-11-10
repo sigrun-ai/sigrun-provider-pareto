@@ -24,15 +24,16 @@ import type {
 	CredentialStore,
 	RefreshModelsContext,
 } from "@earendil-works/pi-ai";
+import { checkStoredSettings } from "@sigrun/sigrun/settings-schema";
 import sigrunPareto, {
 	createParetoPlugin,
 	PARETO_API_KEY_ENV,
 	PARETO_BASE_URL,
 	PARETO_PROVIDER_ID,
 	parseParetoCatalog,
-	resolveParetoBaseUrl,
 	type SigrunPluginHost,
 } from "../src/index.js";
+import { createFakeHost } from "./fake-host.js";
 
 /** The OpenAI-compatible `[OI]` `/models` list shape Pareto serves. */
 const CATALOG_BODY = {
@@ -127,18 +128,9 @@ function authContext(env: Record<string, string> = {}): AuthContext {
 	};
 }
 
-/** The seam-host slice, scoped to whatever settings the test wants. */
+/** The seam-host slice: a declaring host over `settings` (in-memory). */
 function host(settings: Record<string, unknown> = {}): SigrunPluginHost {
-	return {
-		stores: {
-			settings: {
-				get: async () => settings,
-				set: async () => {
-					throw new Error("unexpected settings write in tests");
-				},
-			},
-		},
-	};
+	return createFakeHost(settings).host;
 }
 
 function models(
@@ -175,10 +167,9 @@ describe("the factory contract", () => {
 });
 
 describe("the scoped-settings base URL", () => {
-	it("overrides the constant end to end (trimmed), absent settings fall back", async () => {
+	it("overrides the constant end to end, absent settings fall back", async () => {
 		serveCatalog();
-		// Whitespace around the URL proves the trim.
-		const result = await sigrunPareto(host({ baseUrl: `  ${baseUrl}  ` }));
+		const result = await sigrunPareto(host({ baseUrl }));
 		const store = createModels({
 			credentials: credentialStore("bridged-key"),
 			authContext: authContext({}),
@@ -187,7 +178,7 @@ describe("the scoped-settings base URL", () => {
 		const refresh = await store.refresh({ force: true });
 		expect(refresh.errors.size).toBe(0);
 		// The override drove the fixture server, and the catalog is
-		// stamped with the (trimmed) overridden base.
+		// stamped with the overridden base.
 		expect(requests).toHaveLength(1);
 		expect(requests[0]!.path).toBe("/v1/models");
 		const catalog = store.getModels(PARETO_PROVIDER_ID);
@@ -198,16 +189,15 @@ describe("the scoped-settings base URL", () => {
 		expect(catalog.every((model) => model.baseUrl === baseUrl)).toBe(true);
 	});
 
-	it("resolves: absent → constant, valid → trimmed, malformed → throws", () => {
-		expect(resolveParetoBaseUrl({})).toBe(PARETO_BASE_URL);
-		expect(resolveParetoBaseUrl({ other: true })).toBe(PARETO_BASE_URL);
-		expect(resolveParetoBaseUrl({ baseUrl: `  ${baseUrl} ` })).toBe(baseUrl);
-		expect(() => resolveParetoBaseUrl({ baseUrl: "" })).toThrow(/baseUrl/);
-		expect(() => resolveParetoBaseUrl({ baseUrl: "   " })).toThrow(/baseUrl/);
-		expect(() => resolveParetoBaseUrl({ baseUrl: 42 })).toThrow(/baseUrl/);
-		// A malformed override quarantines the factory loudly rather than
-		// silently falling back to the constant.
-		expect(typeof PARETO_BASE_URL).toBe("string");
+	it("never quarantines the factory on a malformed baseUrl", async () => {
+		// The deleted resolver threw on every one of these, quarantining the
+		// whole plugin; the declared schema repairs the value away and the
+		// plugin boots on the constant (the posture change, asserted in detail
+		// by `settings-schema.test.ts`).
+		for (const malformed of ["", "   ", 42, "not a url"]) {
+			const result = await sigrunPareto(host({ baseUrl: malformed }));
+			expect(result.providers[0]!.provider.baseUrl).toBe(PARETO_BASE_URL);
+		}
 	});
 });
 
@@ -245,26 +235,29 @@ describe("the loader's two-phase host (scoped settings, Task 9 P1 regression)", 
 			);
 			// The loader-shaped two-phase host: pre-keyed on the
 			// specifier-derived slug, settings FILE-BACKED exactly like
-			// sigrun's scopedExtensionStores (reads settings/<slug>.json;
-			// absent file → {}). Not an in-memory stub — the factory must
-			// resolve the real file through the store contract.
+			// sigrun's scoped stores (reads settings/<slug>.json; absent file
+			// → {}). Not an in-memory stub — the factory must resolve the real
+			// file through the declared handle.
 			const host: SigrunPluginHost = {
-				stores: {
-					settings: {
-					get: async () => {
-						try {
-							return JSON.parse(
-								await readFile(settingsFile, "utf8"),
-							) as Record<string, unknown>;
-						} catch {
-							return {}; // absent file → {} (the store's contract)
-						}
-					},
-					set: async () => {
-						throw new Error("unexpected settings write in tests");
-					},
+				settings: {
+					declare: (declaration) => ({
+						get: async () => {
+							let stored: Record<string, unknown> = {};
+							try {
+								stored = JSON.parse(
+									await readFile(settingsFile, "utf8"),
+								) as Record<string, unknown>;
+							} catch {
+								// absent file → {} (the store's contract)
+							}
+							return checkStoredSettings(declaration.schema, stored)
+								.value as never;
+						},
+						user: () => {
+							throw new Error("provider-pareto declares no user schema");
+						},
+					}),
 				},
-			},
 			};
 			const result = await sigrunPareto(host);
 			const store = createModels({
