@@ -1,0 +1,28 @@
+/**
+ * @sigrun/provider-pareto's declared settings (settings rework, Task 11): the
+ * whole scoped surface — one key, `baseUrl` — as one JSON Schema, declared
+ * through `host.settings.declare`. Core draws the settings page's form from
+ * it, applies the defaults and repairs a malformed stored value back to its
+ * default.
+ *
+ * THE POSTURE CHANGE. The deleted `resolveParetoBaseUrl` THREW on a malformed
+ * `baseUrl`, quarantining the whole plugin on a typo. Core's checked read now
+ * repairs the value to its default (a logged repair plus one admin notice), so
+ * the plugin boots on {@link PARETO_BASE_URL} instead. The form refuses a
+ * malformed value at save (`format: "uri"`), so only a hand-edited file can
+ * reach the repair path.
+ *
+ * The key is `restart` (`x-sigrun-apply`): the factory reads it ONCE and bakes
+ * it into the base URL every published model is stamped with, so an edited
+ * value lands at the next boot — the contract this package already documents.
+ */
+import { Type, type Static } from "typebox";
+/**
+ * Pareto's [OI]-compatible endpoint (live-verified 2026-10-18): the `baseUrl`
+ * default, and what a repaired value falls back to.
+ */
+export declare const PARETO_BASE_URL = "https://api.paretoinference.com/v1";
+export declare const PARETO_SETTINGS_SCHEMA: Type.TObject<{
+    baseUrl: Type.TOptional<Type.TString>;
+}> & Readonly<Record<string, unknown>>;
+export type ParetoProviderSettings = Static<typeof PARETO_SETTINGS_SCHEMA>;

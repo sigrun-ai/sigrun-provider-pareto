@@ -22,37 +22,58 @@
  * devDependencies only, because sigrun (the host) ships them and
  * `syncPackages` installs with `--omit=dev` — the provider-plugins spec's
  * dependency posture.
+ *
+ * Settings are declared as JSON Schema (`src/settings-schema.ts`) and read
+ * through the declared handle, so core owns the settings page's form, the
+ * defaults and the malformed-value repair for the one key this plugin has
+ * (`baseUrl`). The declared name and the package name are the same string,
+ * so the loader's provisional slug equals the final slug (`provider-pareto`)
+ * and a factory-time read through the handle resolves the file the settings
+ * page writes. It reads once, because the URL is baked into every model the
+ * provider publishes (`restart`).
  */
 
 import { createProvider, type Provider } from "@earendil-works/pi-ai/models";
 import type { Model } from "@earendil-works/pi-ai";
 import { openAICompletionsApi } from "@earendil-works/pi-ai/api/openai-completions.lazy";
+import type {
+	DeclaredSettings,
+	SettingsDeclaration,
+} from "@sigrun/sigrun/extension";
+import {
+	PARETO_BASE_URL,
+	PARETO_SETTINGS_SCHEMA,
+	type ParetoProviderSettings,
+} from "./settings-schema.js";
 
 /** The provider id models are registered (and stamped) under. */
 export const PARETO_PROVIDER_ID = "pareto";
-/**
- * Pareto's OpenAI-compatible endpoint. Live-verified 2026-10-18; the
- * operator can override per deployment via the plugin's scoped settings
- * (`baseUrl`) — see {@link resolveParetoBaseUrl}.
- */
-export const PARETO_BASE_URL = "https://api.paretoinference.com/v1";
 /** Ambient fallback when auth.json holds no credential. */
 export const PARETO_API_KEY_ENV = "PARETO_API_KEY";
 
+// The endpoint constant lives beside the schema that declares its override
+// (it is what an unset or repaired `baseUrl` falls back to); re-exported so
+// consumers keep one import site.
+export { PARETO_BASE_URL, PARETO_SETTINGS_SCHEMA } from "./settings-schema.js";
+export type { ParetoProviderSettings } from "./settings-schema.js";
+
 /**
  * Structural slice of sigrun's seam host (src/harness/seam-host.ts) a
- * provider plugin may consume. Declared here — structurally, like the
- * bridge's pi-ai re-declarations — because the plugin cannot import
- * sigrun core. The scoped settings store is async-only, which is why the
- * loader awaits factory results (and why this plugin's factory is async).
+ * provider plugin may consume: the declared-settings handle (settings
+ * rework), whose `get()` returns this plugin's own
+ * `settings/<slug>.json` with defaults applied and malformed values
+ * repaired. Declared here — structurally, like the bridge's pi-ai
+ * re-declarations — because the plugin cannot import sigrun core; the two
+ * FUNCTION SHAPES it references are the host's own published declaration
+ * types (`@sigrun/sigrun/extension` is type-only, so nothing of core is
+ * bundled or loaded at runtime). The read is async-only, which is why the
+ * loader awaits factory results.
  */
 export interface SigrunPluginHost {
-	readonly stores: {
-		/** This plugin's own `settings/<slug>.json`; absent file → `{}`. */
-		readonly settings: {
-			get(): Promise<Record<string, unknown>>;
-			set(value: Record<string, unknown>): Promise<void>;
-		};
+	readonly settings: {
+		declare<S = Record<string, unknown>, U = Record<string, unknown>>(
+			declaration: SettingsDeclaration,
+		): DeclaredSettings<S, U>;
 	};
 }
 
@@ -80,26 +101,6 @@ export interface ProviderPluginResult {
 		readonly readiness?: () => ProviderReadiness;
 	}[];
 	readonly health?: () => HealthStatus;
-}
-
-/**
- * Resolve the plugin's base URL from its scoped settings: `baseUrl`
- * (string) overrides the {@link PARETO_BASE_URL} constant. Absent → the
- * constant; present-but-not-a-non-empty-string → throw (a malformed
- * override must quarantine loudly, not silently fall back to a possibly
- * wrong constant).
- */
-export function resolveParetoBaseUrl(
-	settings: Record<string, unknown>,
-): string {
-	if (!("baseUrl" in settings)) return PARETO_BASE_URL;
-	const value = settings.baseUrl;
-	if (typeof value !== "string" || value.trim().length === 0) {
-		throw new Error(
-			"provider-pareto: settings/provider-pareto.json baseUrl must be a non-empty string when present",
-		);
-	}
-	return value.trim();
 }
 
 /**
@@ -319,14 +320,30 @@ export function createParetoPlugin(
  * The sigrun extension-package factory (provider-only contributor).
  * Arity 1 declares the host-taking signature — sigrun's loader passes the
  * seam host only to factories that declare one (`factory.length > 0`) —
- * and the factory is ASYNC because the scoped settings store is
+ * and the factory is ASYNC because the declared-settings read is
  * async-only; sigrun's loader awaits factory results.
+ *
+ * Settings are DECLARED first (`src/settings-schema.ts` — core owns the
+ * page, the defaults and the malformed-value repair) and read ONCE, then
+ * baked into the provider: the base URL is factory-time, so the property is
+ * `restart`. An absent `baseUrl` — and one core REPAIRED to the key's
+ * default, the posture change from the deleted resolver's throw — reads back
+ * as the documented endpoint the schema declares. The declared name and this
+ * package's name are the same string (`provider-pareto`), so the loader's
+ * provisional slug IS the final slug and the factory-time read resolves
+ * `settings/provider-pareto.json`, the file a deployment points at its own
+ * endpoint with.
  */
 export default async function sigrunPareto(
 	host: SigrunPluginHost,
 ): Promise<ProviderPluginResult> {
-	const settings = await host.stores.settings.get();
-	const plugin = createParetoPlugin(resolveParetoBaseUrl(settings));
+	const declared = host.settings.declare<ParetoProviderSettings>({
+		schema: PARETO_SETTINGS_SCHEMA,
+	});
+	const settings = await declared.get();
+	// `baseUrl` carries the endpoint as its schema default, so the checked read
+	// always hands over a usable URL — absent, unset and repaired values alike.
+	const plugin = createParetoPlugin(settings.baseUrl);
 	return {
 		name: "provider-pareto",
 		providers: [{ provider: plugin.provider, readiness: plugin.readiness }],
