@@ -253,6 +253,7 @@ export default async function sigrunPareto(host) {
     const plugin = createParetoPlugin(settings.baseUrl);
     return {
         name: "provider-pareto",
+        title: "Pareto",
         providers: [{ provider: plugin.provider, readiness: plugin.readiness }],
         health: plugin.health,
     };
